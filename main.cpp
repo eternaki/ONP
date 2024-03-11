@@ -20,8 +20,8 @@ enum ItemType {
 
 class Item {
     ItemType type;
-    int value;
 public:
+    int value = 1;
     Item() {};
     Item(ItemType type) { this->type = type; };
     Item(int value) {
@@ -32,6 +32,10 @@ public:
         if (type != NUMBER) throw "item is not number";
         return value;
     }
+    void increment() {
+        value++;
+    }
+
     ItemType getType() { return type; } // return type of data
     bool isOperand() {
         return this->type != NUMBER;
@@ -70,7 +74,12 @@ std::ostream &operator<<(std::ostream &out, Item item) {
         case RIGHT_PAREN: str = ")"; break;
         case NUMBER: out << item.value; return out;
     }
-    return out << str;
+    out << str;
+    if (item.getType() == MAXIMUM ||
+        item.getType() == MINIMUM) {
+        out << item.value;
+    }
+    return out;
 }
 
 struct StackNode {
@@ -124,7 +133,7 @@ public:
         }
     }
 
-    Item top() {
+    Item &top() {
         return last->item;
     }
 
@@ -180,26 +189,41 @@ public:
         }
     }
 
-    void max() {
-        Item maxVal = top();
+    void max(int n) {
+        Item maxVal;
         Item current;
-        while (pop(current)) {
-            if (current > maxVal) {
+        pop(maxVal);
+        for (int i = 0; i < n - 1; i++) {
+            pop(current);
+            if (current.value > maxVal.value) {
                 maxVal = current;
             }
         }
-        push(maxVal);
+        push(maxVal.value);
     }
 
-    void min() {
-        Item minVal = top();
+    void min(int n) {
+        Item minVal;
         Item current;
-        while (pop(current)) {
-            if (current < minVal) {
+        pop(minVal);
+        for (int i = 0; i < n - 1; i++) {
+            pop(current);
+            if (current.value < minVal.value) {
                 minVal = current;
             }
         }
-        push(minVal);
+        push(minVal.value);
+    }
+
+    void incrementMinOrMaxArgs() {
+        for (StackNode *current = last;
+             current != nullptr;
+             current = current->last) {
+            if (current->item.getType() == MAXIMUM ||
+                current->item.getType() == MINIMUM) {
+                current->item.increment();
+            }
+        }
     }
 
     int evaluateExpression(int &result) {
@@ -217,8 +241,8 @@ public:
                 case MULTIPLICATION: stack.mul(); break;
                 case DIVISION: error = stack.div(); break;
                 case NEGATION: stack.neg(); break;
-                case MAXIMUM: stack.max(); break;
-                case MINIMUM: stack.min(); break;
+                case MAXIMUM: stack.max(operand.value); break;
+                case MINIMUM: stack.min(operand.value); break;
                 case CONDITION: stack.cond(); break;
                 case NUMBER: stack.push(operand); break;
             }
@@ -252,6 +276,8 @@ public:
         }
     }
 
+
+
     void readExpression(Stack *exp) {
         Stack operands;
         Item item;
@@ -268,14 +294,12 @@ public:
                     }
                     exp->push(item);
                 }
+                operands.top().value++; // this will be the function either min
+                // or max
                 operands.push(Item(LEFT_PAREN));
             } else if (item.getType() == LEFT_PAREN)
                 operands.push(item);
             else if (item.getType() == RIGHT_PAREN) {
-                // take out all the items that have higher
-                // precedence
-                // this is because they should be executed
-                // before the lower precedence operators
                 while (operands.pop(item)) {
                     if (item.getType() == LEFT_PAREN) {
                         break;
@@ -288,6 +312,10 @@ public:
                        item.getType() == MINIMUM) {
                 operands.push(item);
             } else if (item.isOperand()) {
+                // take out all the items that have higher
+                // precedence
+                // this is because they should be executed
+                // before the lower precedence operators
                 Item oper;
                 while (operands.pop(oper)) {
                     if (item.priority() <= oper.priority()) {
